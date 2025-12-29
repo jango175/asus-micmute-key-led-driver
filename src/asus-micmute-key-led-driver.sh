@@ -1,20 +1,21 @@
 #!/bin/bash
 
-# detect the active user (usually UID 1000) for wpctl command
-TARGET_USER=$(loginctl list-users | grep -v 'UID' | awk '{print $2}' | head -n 1)
-TARGET_UID=$(id -u "$TARGET_USER")
-export XDG_RUNTIME_DIR="/run/user/$TARGET_UID"
-
 MICMUTE_PATH="/sys/devices/platform/asus-nb-wmi/leds/platform::micmute/brightness"
-LAST_STATE="-1"
+CARD="-c 1"
+CONTROL="Capture"
 
+# Check if the sound card is actually ready
+if ! amixer $CARD get $CONTROL > /dev/null 2>&1; then
+  echo "Error: Audio device '$CONTROL' not found. It might be initializing or named differently."
+  exit 1
+fi
 
 while true; do
-  OUTPUT=$(sudo -u "$TARGET_USER" XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR wpctl get-volume @DEFAULT_AUDIO_SOURCE@)
-  if echo "$OUTPUT" | grep -q "MUTED"; then
-    CURRENT_STATE="1" # LED ON (muted)
+  # Check for [off] flag. In ALSA, [off] means Muted. [on] means Active.
+  if amixer $CARD get $CONTROL | grep -q "\[off\]"; then
+    CURRENT_STATE="1"
   else
-    CURRENT_STATE="0" # LED OFF (unmuted)
+    CURRENT_STATE="0"
   fi
 
   if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
